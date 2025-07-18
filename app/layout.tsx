@@ -3,8 +3,6 @@ import type { Metadata } from "next"
 import { Inter, Open_Sans } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import Navigation from "@/components/navigation"
-import Footer from "@/components/footer"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,17 +17,12 @@ const openSans = Open_Sans({
 })
 
 export const metadata: Metadata = {
-  title: {
-    template: "%s | Miranda Holst, PhD Candidate",
-    default: "Miranda Holst, PhD Candidate | Molecular Pharmaceutics",
-  },
-  description:
-    "Miranda Holst is a PhD Candidate in Molecular Pharmaceutics at the University of Texas at Austin, specializing in innovative drug delivery systems.",
+  title: "Coming Soon",
+  description: "Website coming soon. Please check back later.",
   openGraph: {
-    type: "profile",
-    title: "Miranda Holst | PhD Candidate in Molecular Pharmaceutics",
-    description: "Researching innovative drug delivery systems at the University of Texas at Austin.",
-    url: "https://mirandaholst-phd.vercel.app",
+    type: "website",
+    title: "Coming Soon",
+    description: "Website coming soon.",
   },
     generator: 'v0.dev'
 }
@@ -41,11 +34,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${openSans.variable} min-h-screen flex flex-col font-body`}>
+      <body className={`${inter.variable} ${openSans.variable} min-h-screen font-body`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <Navigation />
-          <main className="flex-grow">{children}</main>
-          <Footer />
+          {children}
         </ThemeProvider>
       </body>
     </html>
