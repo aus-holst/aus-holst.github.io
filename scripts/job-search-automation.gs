@@ -98,6 +98,17 @@ function sleep(ms) {
   Utilities.sleep(ms);
 }
 
+/**
+ * Builds a search query for a job title with site restrictions
+ * @param {string} jobTitle - The job title to search for
+ * @returns {string} The formatted search query
+ */
+function buildSearchQuery(jobTitle) {
+  const siteRestrictions = '(site:greenhouse.io OR site:lever.co OR site:ashbyhq.com)';
+  const locationFilters = '("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")';
+  return `"${jobTitle}" ${siteRestrictions} ${locationFilters}`;
+}
+
 // ============================================================================
 // SEARCH FUNCTION
 // ============================================================================
@@ -725,8 +736,8 @@ function runDailyJobSearch() {
     for (const jobConfig of JOB_TITLES) {
       totalSearches++;
 
-      // Build search query
-      const query = `"${jobConfig.title}" ("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")`;
+      // Build search query with site restrictions
+      const query = buildSearchQuery(jobConfig.title);
       console.log(`\n[${totalSearches}/${JOB_TITLES.length}] Searching: ${jobConfig.title}`);
 
       try {
@@ -833,8 +844,8 @@ function testConfiguration() {
     const sheet = getJobSheet();
     console.log('✓ Sheet access successful');
 
-    // Test API with a simple query
-    const testQuery = '"Program Manager" ("Austin, TX")';
+    // Test API with a simple query using site restrictions
+    const testQuery = buildSearchQuery('Program Manager');
     const results = searchGoogleJobs(testQuery);
     console.log(`✓ API test successful - found ${results.length} results`);
 
@@ -893,13 +904,13 @@ function testJobSearch() {
   // TEST 1: Search API with "Senior Program Manager"
   // -------------------------------------------------------------------------
   console.log('\n--- TEST 1: Search API ---');
-  console.log('Query: "Senior Program Manager" ("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")');
+  const query = buildSearchQuery('Senior Program Manager');
+  console.log(`Query: ${query}`);
 
   try {
     const apiKey = getScriptProperty('API_KEY');
     const searchEngineId = getScriptProperty('SEARCH_ENGINE_ID');
 
-    const query = '"Senior Program Manager" ("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")';
     const encodedQuery = encodeURIComponent(query);
     const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodedQuery}`;
 
