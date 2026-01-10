@@ -1,9 +1,11 @@
 /**
  * Google Apps Script for Automated Job Searching
  *
- * Configuration:
- * - Set API_KEY, SEARCH_ENGINE_ID, and SHEET_ID in Script Properties
- *   (File > Project Settings > Script Properties)
+ * Configuration (File > Project Settings > Script Properties):
+ * - API_KEY: Google Custom Search API key
+ * - SEARCH_ENGINE_ID: Custom Search Engine ID
+ * - SHEET_ID: Google Sheets ID for storing results
+ * - EMAIL_ENABLED: Set to "true" to receive daily email summaries (optional)
  *
  * Usage:
  * - Run runDailyJobSearch() manually or set up a daily trigger
@@ -519,6 +521,176 @@ function appendJobToSheet(jobData, sheet) {
 }
 
 // ============================================================================
+// EMAIL SUMMARY FUNCTION
+// ============================================================================
+
+/**
+ * Checks if email notifications are enabled
+ * @returns {boolean} True if EMAIL_ENABLED is set to "true"
+ */
+function isEmailEnabled() {
+  const value = PropertiesService.getScriptProperties().getProperty('EMAIL_ENABLED');
+  return value && value.toLowerCase() === 'true';
+}
+
+/**
+ * Sends an email summary of the job search results
+ * @param {Object} stats - Search statistics
+ * @param {number} stats.totalSearches - Total API searches performed
+ * @param {number} stats.totalResultsFound - Total results from all searches
+ * @param {number} stats.totalNewJobs - New jobs added to sheet
+ * @param {number} stats.totalDuplicates - Duplicates skipped
+ * @param {number} stats.totalErrors - Errors encountered
+ * @param {Array<Object>} newJobs - Array of new job objects added
+ */
+function sendEmailSummary(stats, newJobs) {
+  if (!isEmailEnabled()) {
+    console.log('Email notifications disabled (EMAIL_ENABLED != "true")');
+    return;
+  }
+
+  const recipient = 'aus.holst@gmail.com';
+  const today = getTodayFormatted();
+  const subject = `Job Search Results - ${today}`;
+
+  try {
+    // Build the email body
+    let body = '';
+
+    // Summary section
+    body += '=== Daily Job Search Summary ===\n\n';
+    body += `Date: ${today}\n`;
+    body += `Total jobs found across all searches: ${stats.totalResultsFound}\n`;
+    body += `New jobs added to sheet: ${stats.totalNewJobs}\n`;
+    body += `Duplicates skipped: ${stats.totalDuplicates}\n`;
+    if (stats.totalErrors > 0) {
+      body += `Errors encountered: ${stats.totalErrors}\n`;
+    }
+    body += '\n';
+
+    // New jobs table
+    if (newJobs.length > 0) {
+      body += '=== New Jobs Added ===\n\n';
+
+      // Limit to 20 jobs
+      const jobsToShow = newJobs.slice(0, 20);
+      const hasMore = newJobs.length > 20;
+
+      // Create a simple text table
+      body += 'Title | Company | URL\n';
+      body += '-'.repeat(80) + '\n';
+
+      for (const job of jobsToShow) {
+        // Truncate title if too long
+        const title = job.title.length > 40 ? job.title.substring(0, 37) + '...' : job.title;
+        const company = job.company.length > 20 ? job.company.substring(0, 17) + '...' : job.company;
+        body += `${title} | ${company} | ${job.url}\n`;
+      }
+
+      if (hasMore) {
+        body += `\n... and ${newJobs.length - 20} more jobs. Check the spreadsheet for the full list.\n`;
+      }
+    } else {
+      body += 'No new jobs found today.\n';
+    }
+
+    body += '\n---\nThis is an automated email from your Job Search Script.';
+
+    // Build HTML body for better formatting
+    let htmlBody = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; color: #333; }
+            h2 { color: #2c5aa0; }
+            .stats { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .stats p { margin: 5px 0; }
+            table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+            th { background: #2c5aa0; color: white; padding: 10px; text-align: left; }
+            td { padding: 8px; border-bottom: 1px solid #ddd; }
+            tr:hover { background: #f5f5f5; }
+            a { color: #2c5aa0; }
+            .footer { margin-top: 30px; color: #888; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <h2>Daily Job Search Summary - ${today}</h2>
+
+          <div class="stats">
+            <p><strong>Total jobs found across all searches:</strong> ${stats.totalResultsFound}</p>
+            <p><strong>New jobs added to sheet:</strong> ${stats.totalNewJobs}</p>
+            <p><strong>Duplicates skipped:</strong> ${stats.totalDuplicates}</p>
+            ${stats.totalErrors > 0 ? `<p><strong>Errors encountered:</strong> ${stats.totalErrors}</p>` : ''}
+          </div>
+    `;
+
+    if (newJobs.length > 0) {
+      const jobsToShow = newJobs.slice(0, 20);
+      const hasMore = newJobs.length > 20;
+
+      htmlBody += `
+          <h3>New Jobs Added</h3>
+          <table>
+            <tr>
+              <th>Title</th>
+              <th>Company</th>
+              <th>Link</th>
+            </tr>
+      `;
+
+      for (const job of jobsToShow) {
+        htmlBody += `
+            <tr>
+              <td>${escapeHtml(job.title)}</td>
+              <td>${escapeHtml(job.company)}</td>
+              <td><a href="${escapeHtml(job.url)}">View Job</a></td>
+            </tr>
+        `;
+      }
+
+      htmlBody += '</table>';
+
+      if (hasMore) {
+        htmlBody += `<p><em>... and ${newJobs.length - 20} more jobs. Check the spreadsheet for the full list.</em></p>`;
+      }
+    } else {
+      htmlBody += '<p>No new jobs found today.</p>';
+    }
+
+    htmlBody += `
+          <p class="footer">This is an automated email from your Job Search Script.</p>
+        </body>
+      </html>
+    `;
+
+    // Send the email
+    GmailApp.sendEmail(recipient, subject, body, {
+      htmlBody: htmlBody
+    });
+
+    console.log(`Email summary sent to ${recipient}`);
+
+  } catch (error) {
+    console.error(`Failed to send email summary: ${error.message}`);
+  }
+}
+
+/**
+ * Escapes HTML special characters
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ============================================================================
 // MAIN FUNCTION
 // ============================================================================
 
@@ -535,6 +707,10 @@ function runDailyJobSearch() {
   let totalDuplicates = 0;
   let totalSearches = 0;
   let totalErrors = 0;
+  let totalResultsFound = 0;
+
+  // Track new jobs for email summary
+  const newJobsList = [];
 
   try {
     // Get the sheet and load existing URLs for de-duplication
@@ -557,6 +733,7 @@ function runDailyJobSearch() {
         // Search for jobs
         const results = searchGoogleJobs(query);
         console.log(`  Found ${results.length} results`);
+        totalResultsFound += results.length;
 
         // Process each result
         for (const result of results) {
@@ -585,6 +762,9 @@ function runDailyJobSearch() {
           // Append to sheet
           appendJobToSheet(jobData, sheet);
 
+          // Add to new jobs list for email
+          newJobsList.push(jobData);
+
           // Add to session URLs to prevent duplicates within this run
           sessionUrls.push(result.link);
           totalNewJobs++;
@@ -609,16 +789,24 @@ function runDailyJobSearch() {
   // Log summary
   console.log('\n=== Job Search Complete ===');
   console.log(`Total searches: ${totalSearches}`);
+  console.log(`Total results found: ${totalResultsFound}`);
   console.log(`New jobs added: ${totalNewJobs}`);
   console.log(`Duplicates skipped: ${totalDuplicates}`);
   console.log(`Errors encountered: ${totalErrors}`);
 
-  return {
+  // Prepare stats for return and email
+  const stats = {
     totalSearches,
+    totalResultsFound,
     totalNewJobs,
     totalDuplicates,
     totalErrors
   };
+
+  // Send email summary
+  sendEmailSummary(stats, newJobsList);
+
+  return stats;
 }
 
 // ============================================================================
