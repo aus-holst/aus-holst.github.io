@@ -691,3 +691,137 @@ function removeDailyTrigger() {
     }
   }
 }
+
+/**
+ * Test function to verify all parsing functions work correctly
+ * Run this to validate the script behavior before deploying
+ */
+function testJobSearch() {
+  console.log('='.repeat(60));
+  console.log('STARTING JOB SEARCH TESTS');
+  console.log('='.repeat(60));
+
+  // -------------------------------------------------------------------------
+  // TEST 1: Search API with "Senior Program Manager"
+  // -------------------------------------------------------------------------
+  console.log('\n--- TEST 1: Search API ---');
+  console.log('Query: "Senior Program Manager" ("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")');
+
+  try {
+    const apiKey = getScriptProperty('API_KEY');
+    const searchEngineId = getScriptProperty('SEARCH_ENGINE_ID');
+
+    const query = '"Senior Program Manager" ("Austin, TX" OR "Austin, Texas" OR "remote" OR "hybrid")';
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodedQuery}`;
+
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const responseCode = response.getResponseCode();
+    const rawResponse = response.getContentText();
+
+    console.log(`Response Code: ${responseCode}`);
+    console.log('Raw API Response:');
+    console.log(rawResponse);
+
+    if (responseCode === 200) {
+      const data = JSON.parse(rawResponse);
+      console.log(`\nParsed Results Count: ${data.items ? data.items.length : 0}`);
+      if (data.items && data.items.length > 0) {
+        console.log('First result:');
+        console.log(`  Title: ${data.items[0].title}`);
+        console.log(`  Link: ${data.items[0].link}`);
+        console.log(`  Snippet: ${data.items[0].snippet}`);
+      }
+    }
+  } catch (error) {
+    console.error(`Search API test failed: ${error.message}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // TEST 2: parseCompanyName() with sample URLs
+  // -------------------------------------------------------------------------
+  console.log('\n--- TEST 2: parseCompanyName() ---');
+
+  const companyTestCases = [
+    {
+      url: 'https://boards.greenhouse.io/stripe/jobs/12345',
+      title: 'Senior Program Manager',
+      snippet: 'Join our team...',
+      expected: 'Stripe'
+    },
+    {
+      url: 'https://jobs.lever.co/figma/67890',
+      title: 'Program Manager',
+      snippet: 'Design tool company...',
+      expected: 'Figma'
+    }
+  ];
+
+  for (const testCase of companyTestCases) {
+    const result = parseCompanyName(testCase.url, testCase.title, testCase.snippet);
+    const status = result.toLowerCase() === testCase.expected.toLowerCase() ? '✓' : '✗';
+    console.log(`\n${status} URL: ${testCase.url}`);
+    console.log(`  Expected: ${testCase.expected}`);
+    console.log(`  Result:   ${result}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // TEST 3: parseSalary() with sample snippets
+  // -------------------------------------------------------------------------
+  console.log('\n--- TEST 3: parseSalary() ---');
+
+  const salaryTestCases = [
+    {
+      snippet: '$120,000 - $150,000 per year',
+      title: 'Program Manager',
+      description: 'Standard salary range'
+    },
+    {
+      snippet: 'Zone 1: $180K | Zone 2: $150K | Zone 3: $120K',
+      title: 'Remote Program Manager',
+      description: 'Multi-zone salary (should detect Zone 2 for Austin)'
+    },
+    {
+      snippet: 'Competitive salary',
+      title: 'Program Manager',
+      description: 'No salary listed'
+    }
+  ];
+
+  for (const testCase of salaryTestCases) {
+    const result = parseSalary(testCase.snippet, testCase.title);
+    console.log(`\nTest: ${testCase.description}`);
+    console.log(`  Snippet: "${testCase.snippet}"`);
+    console.log(`  Title:   "${testCase.title}"`);
+    console.log(`  Result:  ${result}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // TEST 4: parseLocationType() with sample text
+  // -------------------------------------------------------------------------
+  console.log('\n--- TEST 4: parseLocationType() ---');
+
+  const locationTestCases = [
+    {
+      snippet: 'This is a remote position based in Austin, TX',
+      title: 'Program Manager',
+      description: 'Remote position with Austin mentioned'
+    }
+  ];
+
+  for (const testCase of locationTestCases) {
+    const result = parseLocationType(testCase.snippet, testCase.title);
+    console.log(`\nTest: ${testCase.description}`);
+    console.log(`  Snippet: "${testCase.snippet}"`);
+    console.log(`  Title:   "${testCase.title}"`);
+    console.log(`  Result:  ${result}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // SUMMARY
+  // -------------------------------------------------------------------------
+  console.log('\n' + '='.repeat(60));
+  console.log('TEST COMPLETE');
+  console.log('='.repeat(60));
+  console.log('Review the output above to verify each function works correctly.');
+}
