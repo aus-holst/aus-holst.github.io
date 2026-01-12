@@ -412,6 +412,87 @@ function isDuplicateURL(url, existingUrls) {
 }
 
 // ============================================================================
+// GENERIC PAGE FILTER
+// ============================================================================
+
+/**
+ * Checks if a result is a generic careers page rather than a specific job listing
+ * @param {string} url - The URL to check
+ * @param {string} title - The page title to check
+ * @returns {boolean} True if generic (should be skipped), false if it's a real job posting
+ */
+function isGenericCareerPage(url, title) {
+  // Check title patterns for generic career pages
+  const lowerTitle = title.toLowerCase();
+
+  // Title starts with "Jobs at "
+  if (lowerTitle.startsWith('jobs at ')) {
+    return true;
+  }
+
+  // Title ends with " Jobs"
+  if (lowerTitle.endsWith(' jobs')) {
+    return true;
+  }
+
+  // Title contains "Careers at " or "Career Opportunities"
+  if (lowerTitle.includes('careers at ') || lowerTitle.includes('career opportunities')) {
+    return true;
+  }
+
+  // Check URL patterns for missing job IDs
+  const lowerUrl = url.toLowerCase();
+
+  // Greenhouse: valid URLs contain /jobs/ followed by numbers
+  if (lowerUrl.includes('greenhouse.io')) {
+    // Valid pattern: /jobs/12345 or /jobs/12345-job-title
+    const hasJobId = /\/jobs\/\d+/.test(lowerUrl);
+    if (!hasJobId) {
+      return true;
+    }
+  }
+
+  // Lever: valid URLs have a path after the company name
+  // Pattern: jobs.lever.co/company/job-id
+  if (lowerUrl.includes('lever.co')) {
+    // Extract path after company name
+    const leverMatch = lowerUrl.match(/jobs\.lever\.co\/([^\/]+)(\/.*)?/);
+    if (leverMatch) {
+      // If there's no path after company name, or path is just /
+      const pathAfterCompany = leverMatch[2];
+      if (!pathAfterCompany || pathAfterCompany === '/') {
+        return true;
+      }
+    }
+  }
+
+  // Ashby: valid URLs have a path after the company name
+  // Pattern: jobs.ashbyhq.com/company/job-id or company.ashbyhq.com/job-id
+  if (lowerUrl.includes('ashbyhq.com')) {
+    // Check for jobs.ashbyhq.com/company pattern
+    const ashbyJobsMatch = lowerUrl.match(/jobs\.ashbyhq\.com\/([^\/]+)(\/.*)?/);
+    if (ashbyJobsMatch) {
+      const pathAfterCompany = ashbyJobsMatch[2];
+      if (!pathAfterCompany || pathAfterCompany === '/') {
+        return true;
+      }
+    }
+
+    // Check for company.ashbyhq.com pattern
+    const ashbySubdomainMatch = lowerUrl.match(/([^\/]+)\.ashbyhq\.com(\/.*)?/);
+    if (ashbySubdomainMatch && ashbySubdomainMatch[1] !== 'jobs' && ashbySubdomainMatch[1] !== 'www') {
+      const path = ashbySubdomainMatch[2];
+      if (!path || path === '/') {
+        return true;
+      }
+    }
+  }
+
+  // Not a generic page - it's a real job listing
+  return false;
+}
+
+// ============================================================================
 // SHEET FUNCTIONS
 // ============================================================================
 
@@ -551,6 +632,7 @@ function isEmailEnabled() {
  * @param {number} stats.totalResultsFound - Total results from all searches
  * @param {number} stats.totalNewJobs - New jobs added to sheet
  * @param {number} stats.totalDuplicates - Duplicates skipped
+ * @param {number} stats.totalGenericPages - Generic career pages skipped
  * @param {number} stats.totalErrors - Errors encountered
  * @param {Array<Object>} newJobs - Array of new job objects added
  */
@@ -574,6 +656,7 @@ function sendEmailSummary(stats, newJobs) {
     body += `Total jobs found across all searches: ${stats.totalResultsFound}\n`;
     body += `New jobs added to sheet: ${stats.totalNewJobs}\n`;
     body += `Duplicates skipped: ${stats.totalDuplicates}\n`;
+    body += `Generic pages skipped: ${stats.totalGenericPages}\n`;
     if (stats.totalErrors > 0) {
       body += `Errors encountered: ${stats.totalErrors}\n`;
     }
@@ -631,6 +714,7 @@ function sendEmailSummary(stats, newJobs) {
             <p><strong>Total jobs found across all searches:</strong> ${stats.totalResultsFound}</p>
             <p><strong>New jobs added to sheet:</strong> ${stats.totalNewJobs}</p>
             <p><strong>Duplicates skipped:</strong> ${stats.totalDuplicates}</p>
+            <p><strong>Generic pages skipped:</strong> ${stats.totalGenericPages}</p>
             ${stats.totalErrors > 0 ? `<p><strong>Errors encountered:</strong> ${stats.totalErrors}</p>` : ''}
           </div>
     `;
@@ -716,6 +800,7 @@ function runDailyJobSearch() {
 
   let totalNewJobs = 0;
   let totalDuplicates = 0;
+  let totalGenericPages = 0;
   let totalSearches = 0;
   let totalErrors = 0;
   let totalResultsFound = 0;
@@ -751,6 +836,13 @@ function runDailyJobSearch() {
           // Check for duplicates
           if (isDuplicateURL(result.link, sessionUrls)) {
             totalDuplicates++;
+            continue;
+          }
+
+          // Check for generic career pages (not specific job listings)
+          if (isGenericCareerPage(result.link, result.title)) {
+            totalGenericPages++;
+            console.log(`  - Skipped generic page: ${result.title.substring(0, 50)}...`);
             continue;
           }
 
@@ -803,6 +895,7 @@ function runDailyJobSearch() {
   console.log(`Total results found: ${totalResultsFound}`);
   console.log(`New jobs added: ${totalNewJobs}`);
   console.log(`Duplicates skipped: ${totalDuplicates}`);
+  console.log(`Generic pages skipped: ${totalGenericPages}`);
   console.log(`Errors encountered: ${totalErrors}`);
 
   // Prepare stats for return and email
@@ -811,6 +904,7 @@ function runDailyJobSearch() {
     totalResultsFound,
     totalNewJobs,
     totalDuplicates,
+    totalGenericPages,
     totalErrors
   };
 
